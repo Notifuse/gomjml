@@ -1331,13 +1331,6 @@ func (c *MJMLComponent) Render(w io.StringWriter) error {
 	hasOnlyDefaultFonts := len(detectedFonts) == 1 && detectedFonts[0] == fonts.GetGoogleFontURL(fonts.DefaultFontStack)
 	// Pass trackedFonts count to check if ANY fonts (including system fonts) were used
 	importDefault := c.shouldImportDefaultFonts(detectedFonts, len(trackedFonts), hasText, hasSocial, hasButtons, hasOnlyDefaultFonts)
-	if debugEnabled {
-		debug.DebugLogWithData("font-detection", "check-defaults", "Default font import decision", map[string]any{
-			"import_default": importDefault,
-			"detected_count": len(detectedFonts),
-			"has_social":     hasSocial,
-		})
-	}
 
 	// Resolve the tracked fonts, the default font and the mj-font declarations into one list,
 	// in MJML's font registry order

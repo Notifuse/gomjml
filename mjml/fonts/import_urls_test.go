@@ -24,12 +24,13 @@ func TestImportURLs(t *testing.T) {
 	)
 
 	tests := []struct {
-		name          string
-		addedEntries  map[string]string
-		fontFamilies  []string
-		declarations  []Declaration
-		importDefault bool
-		want          []string
+		name           string
+		addedEntries   map[string]string
+		removedEntries []string
+		fontFamilies   []string
+		declarations   []Declaration
+		importDefault  bool
+		want           []string
 	}{
 		{
 			name:         "Tracked fonts in detection order",
@@ -115,22 +116,86 @@ func TestImportURLs(t *testing.T) {
 			fontFamilies: []string{"Empty Font"},
 			want:         nil,
 		},
+		{
+			name:           "Removed built-in entry not imported",
+			removedEntries: []string{"Lato"},
+			fontFamilies:   []string{"Lato", "Roboto"},
+			want:           []string{googleRoboto},
+		},
+		{
+			name:           "Removed built-in entry declared like any other name",
+			removedEntries: []string{"Lato"},
+			fontFamilies:   []string{"Lato", "Roboto"},
+			declarations:   []Declaration{{Name: "Lato", Href: customLato}},
+			want:           []string{googleRoboto, customLato},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			for name, url := range tc.addedEntries {
-				if _, exists := GoogleFontsMapping[name]; exists {
-					t.Fatalf("test fixture %q unexpectedly already present in GoogleFontsMapping", name)
-				}
-				t.Cleanup(func() { delete(GoogleFontsMapping, name) })
-				GoogleFontsMapping[name] = url
-			}
+			editMapping(t, tc.addedEntries, tc.removedEntries)
 
 			got := ImportURLs(tc.fontFamilies, tc.declarations, tc.importDefault)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("ImportURLs() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestGetGoogleFontURLWithoutMatch verifies that GetGoogleFontURL returns an empty URL for a
+// font family that no GoogleFontsMapping entry matches, whether or not entries were added to
+// or removed from the mapping.
+func TestGetGoogleFontURLWithoutMatch(t *testing.T) {
+	tests := []struct {
+		name           string
+		addedEntries   map[string]string
+		removedEntries []string
+		fontFamily     string
+	}{
+		{
+			name:       "Built-in entries only",
+			fontFamily: "Arial, sans-serif",
+		},
+		{
+			name:         "With an added entry",
+			addedEntries: map[string]string{"Comic Neue": "https://fonts.example.com/comic-neue.css"},
+			fontFamily:   "Arial, sans-serif",
+		},
+		{
+			name:           "Family naming a removed entry",
+			removedEntries: []string{"Lato"},
+			fontFamily:     "Lato, Arial",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			editMapping(t, tc.addedEntries, tc.removedEntries)
+
+			if got := GetGoogleFontURL(tc.fontFamily); got != "" {
+				t.Errorf("GetGoogleFontURL(%q) = %q, want no URL", tc.fontFamily, got)
+			}
+		})
+	}
+}
+
+// editMapping adds and removes GoogleFontsMapping entries for the duration of a test.
+func editMapping(t *testing.T, added map[string]string, removed []string) {
+	t.Helper()
+	for name, url := range added {
+		if _, exists := GoogleFontsMapping[name]; exists {
+			t.Fatalf("test fixture %q unexpectedly already present in GoogleFontsMapping", name)
+		}
+		t.Cleanup(func() { delete(GoogleFontsMapping, name) })
+		GoogleFontsMapping[name] = url
+	}
+	for _, name := range removed {
+		url, exists := GoogleFontsMapping[name]
+		if !exists {
+			t.Fatalf("test fixture %q unexpectedly missing from GoogleFontsMapping", name)
+		}
+		t.Cleanup(func() { GoogleFontsMapping[name] = url })
+		delete(GoogleFontsMapping, name)
 	}
 }
